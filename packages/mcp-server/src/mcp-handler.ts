@@ -21,8 +21,12 @@ export class MCPHandler {
   async handleRequest(request: MCPRequest): Promise<MCPResponse> {
     const { jsonrpc, id, method, params } = request;
 
+    console.log(`[MCP] Received request - Method: ${method}, ID: ${id}`);
+    console.log(`[MCP] Request params:`, JSON.stringify(params, null, 2));
+
     // Validate JSON-RPC version
     if (jsonrpc !== '2.0') {
+      console.error('[MCP] Invalid JSON-RPC version:', jsonrpc);
       return this.errorResponse(id, -32600, 'Invalid Request: jsonrpc must be "2.0"');
     }
 
@@ -47,8 +51,12 @@ export class MCPHandler {
           break;
 
         default:
+          console.warn(`[MCP] Unknown method requested: ${method}`);
           return this.errorResponse(id, -32601, `Method not found: ${method}`);
       }
+
+      console.log(`[MCP] Request successful - Method: ${method}`);
+      console.log(`[MCP] Response:`, JSON.stringify(result, null, 2));
 
       return {
         jsonrpc: '2.0',
@@ -57,6 +65,7 @@ export class MCPHandler {
       };
     } catch (error) {
       console.error(`[MCP] Error handling ${method}:`, error);
+      console.error(`[MCP] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
       const message = error instanceof Error ? error.message : 'Internal error';
       return this.errorResponse(id, -32603, message);
     }
@@ -68,28 +77,41 @@ export class MCPHandler {
   private async handleInitialize(params: any): Promise<any> {
     const { protocolVersion, capabilities, clientInfo } = params || {};
 
-    console.log('[MCP] Initialize request from:', clientInfo?.name || 'unknown client');
-    console.log('[MCP] Protocol version:', protocolVersion);
+    console.log('[MCP] ========================================');
+    console.log('[MCP] INITIALIZE REQUEST');
+    console.log('[MCP] Client:', clientInfo?.name || 'unknown');
+    console.log('[MCP] Client version:', clientInfo?.version || 'unknown');
+    console.log('[MCP] Protocol version requested:', protocolVersion);
+    console.log('[MCP] Client capabilities:', JSON.stringify(capabilities, null, 2));
+    console.log('[MCP] ========================================');
 
-    // Test Firefly connection
-    const connected = await this.fireflyClient.testConnection();
-    if (!connected) {
-      throw new Error('Failed to connect to Firefly III');
+    // Test Firefly connection (non-blocking, just warn if fails)
+    try {
+      const connected = await this.fireflyClient.testConnection();
+      if (connected) {
+        console.log('[MCP] ✓ Firefly III connection successful');
+      } else {
+        console.warn('[MCP] ⚠ Firefly III connection test failed - tools may not work properly');
+      }
+    } catch (error) {
+      console.warn('[MCP] ⚠ Firefly III connection test error:', error);
+      console.warn('[MCP] Continuing with initialization anyway...');
     }
 
-    return {
+    const response = {
       protocolVersion: '2024-11-05',
       capabilities: {
-        tools: {
-          listChanged: false
-        }
+        tools: {}
       },
       serverInfo: {
         name: 'firefly-iii-mcp-server',
         version: '2.0.0'
-      },
-      instructions: 'MCP server for Firefly III personal finance manager. Use the available tools to manage accounts, transactions, budgets, and more.'
+      }
     };
+
+    console.log('[MCP] Sending initialize response:', JSON.stringify(response, null, 2));
+
+    return response;
   }
 
   /**

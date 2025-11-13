@@ -146,8 +146,16 @@ export class MCPServer {
 
     // Dynamic Client Registration (RFC 7591)
     this.app.post('/oauth/register', async (req, res) => {
+      console.log('[OAuth] ========================================');
+      console.log('[OAuth] CLIENT REGISTRATION REQUEST');
+      console.log('[OAuth] Metadata:', JSON.stringify(req.body, null, 2));
+      console.log('[OAuth] ========================================');
+
       try {
         const client = this.oauthProvider.registerClient(req.body);
+        console.log('[OAuth] ✓ Client registered successfully');
+        console.log('[OAuth] Client ID:', client.client_id);
+
         res.status(201).json({
           client_id: client.client_id,
           client_secret: client.client_secret,
@@ -166,6 +174,11 @@ export class MCPServer {
 
     // Authorization Endpoint
     this.app.get('/oauth/authorize', async (req, res) => {
+      console.log('[OAuth] ========================================');
+      console.log('[OAuth] AUTHORIZATION REQUEST');
+      console.log('[OAuth] Query params:', JSON.stringify(req.query, null, 2));
+      console.log('[OAuth] ========================================');
+
       try {
         const params = {
           response_type: req.query.response_type as 'code',
@@ -178,6 +191,7 @@ export class MCPServer {
         };
 
         if (!params.client_id || !params.response_type) {
+          console.error('[OAuth] Missing required parameters');
           return res.status(400).json({
             error: 'invalid_request',
             error_description: 'Missing required parameters'
@@ -186,6 +200,7 @@ export class MCPServer {
 
         // Auto-approve for simplicity (in production, show consent screen)
         const result = await this.oauthProvider.authorize(params);
+        console.log('[OAuth] ✓ Authorization code generated');
 
         // Redirect back with authorization code
         const redirectUrl = new URL(params.redirect_uri || 'about:blank');
@@ -194,6 +209,7 @@ export class MCPServer {
           redirectUrl.searchParams.set('state', result.state);
         }
 
+        console.log('[OAuth] Redirecting to:', redirectUrl.toString());
         res.redirect(redirectUrl.toString());
       } catch (error) {
         console.error('[OAuth] Authorization error:', error);
@@ -206,8 +222,16 @@ export class MCPServer {
 
     // Token Endpoint
     this.app.post('/oauth/token', async (req, res) => {
+      console.log('[OAuth] ========================================');
+      console.log('[OAuth] TOKEN REQUEST');
+      console.log('[OAuth] Grant type:', req.body.grant_type);
+      console.log('[OAuth] Client ID:', req.body.client_id);
+      console.log('[OAuth] ========================================');
+
       try {
         const tokenResponse = await this.oauthProvider.token(req.body);
+        console.log('[OAuth] ✓ Token issued successfully');
+        console.log('[OAuth] Access token expires in:', tokenResponse.expires_in, 'seconds');
         res.json(tokenResponse);
       } catch (error) {
         console.error('[OAuth] Token error:', error);
@@ -245,9 +269,13 @@ export class MCPServer {
    * Authenticate request using Bearer token
    */
   private authenticateRequest(req: Request, res: Response, next: NextFunction) {
+    console.log('[Auth] Authenticating request to:', req.path);
+    console.log('[Auth] Headers:', JSON.stringify(req.headers, null, 2));
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[Auth] Missing or invalid Authorization header');
       return res.status(401).json({
         error: 'unauthorized',
         error_description: 'Missing or invalid Authorization header',
@@ -256,15 +284,20 @@ export class MCPServer {
     }
 
     const token = authHeader.substring(7);
+    console.log('[Auth] Validating token:', token.substring(0, 10) + '...');
+
     const tokenData = this.oauthProvider.validateToken(token);
 
     if (!tokenData) {
+      console.error('[Auth] Token validation failed - token is invalid or expired');
       return res.status(401).json({
         error: 'invalid_token',
         error_description: 'Token is invalid or expired',
         www_authenticate: 'Bearer realm="MCP" error="invalid_token"'
       });
     }
+
+    console.log('[Auth] ✓ Token validated successfully for client:', tokenData.client_id);
 
     // Attach token data to request
     (req as any).oauth = tokenData;
@@ -275,20 +308,39 @@ export class MCPServer {
    * Handle MCP requests
    */
   private async handleMCP(req: Request, res: Response) {
+    console.log('[Server] ========================================');
+    console.log('[Server] MCP REQUEST RECEIVED');
+    console.log('[Server] Body:', JSON.stringify(req.body, null, 2));
+    console.log('[Server] ========================================');
+
     try {
       const mcpRequest = req.body;
 
       // Handle batch requests
       if (Array.isArray(mcpRequest)) {
+        console.log('[Server] Processing batch request with', mcpRequest.length, 'items');
         const responses = await this.mcpHandler.handleBatch(mcpRequest);
+        console.log('[Server] Batch request completed successfully');
         return res.json(responses);
       }
 
       // Handle single request
+      console.log('[Server] Processing single MCP request');
       const response = await this.mcpHandler.handleRequest(mcpRequest);
+
+      console.log('[Server] ========================================');
+      console.log('[Server] MCP RESPONSE SENT');
+      console.log('[Server] Response:', JSON.stringify(response, null, 2));
+      console.log('[Server] ========================================');
+
       res.json(response);
     } catch (error) {
-      console.error('[MCP] Request handling error:', error);
+      console.error('[Server] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+      console.error('[Server] MCP REQUEST HANDLING ERROR');
+      console.error('[Server] Error:', error);
+      console.error('[Server] Stack:', error instanceof Error ? error.stack : 'No stack');
+      console.error('[Server] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+
       res.status(500).json({
         jsonrpc: '2.0',
         id: req.body?.id,

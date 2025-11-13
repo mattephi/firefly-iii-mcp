@@ -10,6 +10,9 @@ import helmet from 'helmet';
 import compression from 'compression';
 import http from 'http';
 import https from 'https';
+import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js';
+import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
+import { InMemoryOAuthProvider } from './auth/in-memory-oauth-provider.js';
 
 /**
  * HTTPS server options
@@ -59,6 +62,30 @@ export interface ServerConfig {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** Tool tags to enable */
   enableToolTags?: string[];
+  /** Optional OAuth configuration for Claude/remote MCP clients */
+  auth?: OAuthConfig;
+}
+
+/**
+ * OAuth configuration for MCP server
+ */
+export interface OAuthConfig {
+  /** Issuer/authorization server base URL (e.g. https://example.com/oauth) */
+  issuerUrl: string;
+  /** Canonical MCP resource URL (e.g. https://example.com/mcp) */
+  resourceServerUrl: string;
+  /** Optional documentation URL shown in metadata */
+  documentationUrl?: string;
+  /** Scopes supported by this server */
+  scopes?: string[];
+  /** Human readable resource name */
+  resourceName?: string;
+  /** Access token lifetime in seconds */
+  accessTokenTtlSeconds?: number;
+  /** Refresh token lifetime in seconds */
+  refreshTokenTtlSeconds?: number;
+  /** Whether to enforce the resource parameter */
+  strictResource?: boolean;
 }
 
 /**
@@ -102,6 +129,7 @@ export function createServer(config: ServerConfig): McpServer {
   
   // Apply middleware
   app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
   app.use(compression());
   app.use(helmet({
     contentSecurityPolicy: {
@@ -118,6 +146,41 @@ export function createServer(config: ServerConfig): McpServer {
     app.use(cors(corsOptions));
   }
 
+  let authMiddleware: ReturnType<typeof requireBearerAuth> | undefined;
+
+  if (config.auth) {
+    const scopes = config.auth.scopes && config.auth.scopes.length > 0 ? config.auth.scopes : ['mcp:tools'];
+    const resourceServerUrl = new URL(config.auth.resourceServerUrl);
+    const issuerUrl = new URL(config.auth.issuerUrl);
+    const documentationUrl = config.auth.documentationUrl ? new URL(config.auth.documentationUrl) : undefined;
+
+    const oauthProvider = new InMemoryOAuthProvider({
+      resourceServerUrl,
+      defaultScopes: scopes,
+      accessTokenTtlSeconds: config.auth.accessTokenTtlSeconds,
+      refreshTokenTtlSeconds: config.auth.refreshTokenTtlSeconds,
+      strictResource: config.auth.strictResource ?? true
+    });
+
+    app.use(
+      mcpAuthRouter({
+        provider: oauthProvider,
+        issuerUrl,
+        baseUrl: issuerUrl,
+        scopesSupported: scopes,
+        serviceDocumentationUrl: documentationUrl,
+        resourceName: config.auth.resourceName ?? 'Firefly III MCP',
+        resourceServerUrl
+      })
+    );
+
+    const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(resourceServerUrl);
+    authMiddleware = requireBearerAuth({
+      verifier: oauthProvider,
+      resourceMetadataUrl
+    });
+  }
+
   // Store transports by session ID
   const transports: Record<string, SSEServerTransport | StreamableHTTPServerTransport> = {};
 
@@ -126,8 +189,7 @@ export function createServer(config: ServerConfig): McpServer {
     res.status(200).json({ status: 'ok' });
   });
 
-  // Main MCP endpoint for Streamable HTTP
-  app.all('/mcp', async (req: Request, res: Response) => {
+  const mcpHandler = async (req: Request, res: Response) => {
     logDebug(`Received ${req.method} request to /mcp`);
 
     try {
@@ -210,10 +272,16 @@ export function createServer(config: ServerConfig): McpServer {
         });
       }
     }
-  });
+  };
+
+  if (authMiddleware) {
+    app.all('/mcp', authMiddleware, mcpHandler);
+  } else {
+    app.all('/mcp', mcpHandler);
+  }
 
   // SSE endpoint
-  app.get('/sse', async (req: Request, res: Response) => {
+  const sseHandler = async (req: Request, res: Response) => {
     logDebug('Received GET request to /sse');
     const transport = new SSEServerTransport('/messages', res);
     transports[transport.sessionId] = transport;
@@ -227,10 +295,16 @@ export function createServer(config: ServerConfig): McpServer {
     };
     const server = getServer(mcpServerConfig);
     await server.connect(transport);
-  });
+  };
+
+  if (authMiddleware) {
+    app.get('/sse', authMiddleware, sseHandler);
+  } else {
+    app.get('/sse', sseHandler);
+  }
 
   // Messages endpoint for SSE
-  app.post("/messages", async (req: Request, res: Response) => {
+  const sseMessagesHandler = async (req: Request, res: Response) => {
     const sessionId = req.query.sessionId as string;
     let transport: SSEServerTransport;
     const existingTransport = transports[sessionId];
@@ -254,7 +328,13 @@ export function createServer(config: ServerConfig): McpServer {
     } else {
       res.status(400).send('No transport found for sessionId');
     }
-  });
+  };
+
+  if (authMiddleware) {
+    app.post("/messages", authMiddleware, sseMessagesHandler);
+  } else {
+    app.post("/messages", sseMessagesHandler);
+  }
 
   // Create HTTP or HTTPS server
   const server = httpsOptions 

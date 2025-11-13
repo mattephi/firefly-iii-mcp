@@ -9,7 +9,8 @@ export {
   ServerConfig,
   McpServer,
   HttpsOptions,
-  CorsOptions
+  CorsOptions,
+  OAuthConfig
 } from './server.js';
 
 // Re-export the event store for advanced use cases

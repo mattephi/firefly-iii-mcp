@@ -137,6 +137,26 @@ Command-line options:
 - `-s, --preset <name>` - Tool preset to use (default, full, basic, budget, reporting, admin, automation)
 - `-t, --tools <list>` - Comma-separated list of tool tags to enable
 
+**Claude / Remote MCP Mode**
+
+Enable the OAuth 2.1 wrapper required by Claude's remote MCP connectors with `--claude` (or `--authMode oauth`) plus the canonical public URL of your `/mcp` endpoint:
+
+```bash
+npx @firefly-iii-mcp/server \
+  --claude \
+  --publicUrl https://mcp.yourdomain.com/mcp \
+  --pat YOUR_PAT \
+  --baseUrl https://firefly.example.com
+```
+
+When OAuth mode is active the server automatically:
+
+1. Serves `/.well-known/oauth-protected-resource[...]` and `/.well-known/oauth-authorization-server` metadata that point Claude to the correct issuer.
+2. Hosts `/authorize`, `/token`, `/register`, and `/revoke` endpoints (with PKCE + dynamic client registration) using the Model Context Protocol SDK.
+3. Requires every `/mcp`, `/sse`, and `/messages` request to include an `Authorization: Bearer <token>` header. Unauthorized calls receive `401` responses with the RFC 9728 `resource_metadata` hint Claude expects.
+
+Use the `--authIssuerUrl`, `--authDocsUrl`, `--authScopes`, and token TTL flags (or the corresponding `FIREFLY_III_AUTH_*` environment variables) to customize metadata for your deployment.
+
 #### As a Library
 
 ```bash

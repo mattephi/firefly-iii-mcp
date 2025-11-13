@@ -50,12 +50,14 @@ This package is part of a monorepo managed with Turborepo. Please refer to the [
 
 ### Regenerating tools
 
-The build step runs `scripts/generate-tools.ts`, which dereferences the Firefly III OpenAPI schema. By default it downloads the spec from `https://api-docs.firefly-iii.org/firefly-iii-6.2.13-v1.yaml`. If that host is blocked in your environment, set either of the following before running `npm run build`:
+The build step runs `scripts/generate-tools.ts`, which dereferences the Firefly III OpenAPI schema. By default it always loads the bundled snapshot in `packages/core/assets/firefly-iii-6.2.13-v1.yaml`, so no external download is required.
 
-- `FIREFLY_III_OPENAPI_FILE` – absolute or relative path to a local Firefly III OpenAPI YAML file
+If you want to experiment with a different Firefly version, set one of the following before running `npm run build`:
+
+- `FIREFLY_III_OPENAPI_FILE` – absolute or relative path to a local Firefly III OpenAPI YAML file (highest priority)
 - `FIREFLY_III_OPENAPI_URL` – alternate URL that serves the schema
 
-The repository also includes a cached snapshot in `packages/core/assets/firefly-iii-6.2.13-v1.yaml`, which is used automatically as a fallback when the remote URL is unavailable.
+If both are unset the bundled snapshot is used, ensuring builds succeed even in restricted environments.
 
 ## License
 

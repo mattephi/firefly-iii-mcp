@@ -9,7 +9,6 @@ import { getToolsFromOpenApiDocument } from './generator/api';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Api Document URL */
-const DEFAULT_API_DOCUMENT_URL = 'https://api-docs.firefly-iii.org/firefly-iii-6.2.13-v1.yaml';
 const LOCAL_SPEC_PATH = path.resolve(__dirname, '../assets/firefly-iii-6.2.13-v1.yaml');
 const OUTPUT_FILE = './src/tools.ts';
 
@@ -24,7 +23,6 @@ const envUrl = process.env.FIREFLY_III_OPENAPI_URL?.trim();
 const specSources: SpecSource[] = [
   envFile ? { label: 'FIREFLY_III_OPENAPI_FILE', location: envFile } : undefined,
   envUrl ? { label: 'FIREFLY_III_OPENAPI_URL', location: envUrl } : undefined,
-  { label: 'Firefly III public OpenAPI URL', location: DEFAULT_API_DOCUMENT_URL },
   { label: 'bundled OpenAPI snapshot', location: LOCAL_SPEC_PATH }
 ].filter((item): item is SpecSource => Boolean(item));
 

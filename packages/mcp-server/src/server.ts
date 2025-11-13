@@ -354,9 +354,92 @@ export class MCPServer {
   }
 
   /**
+   * Validate Firefly III connection on startup
+   */
+  private async validateFireflyConnection(): Promise<void> {
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║  Testing Firefly III Connection...                            ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝\n');
+
+    console.log('[Startup] Firefly III URL:', this.config.firefly.baseUrl);
+    console.log('[Startup] PAT Token:', this.config.firefly.accessToken.substring(0, 10) + '...');
+
+    try {
+      console.log('[Startup] Attempting connection to Firefly III...');
+
+      const response = await fetch(`${this.config.firefly.baseUrl}/api/v1/about`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.config.firefly.accessToken}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('\n❌ FIREFLY III CONNECTION FAILED ❌');
+        console.error('═══════════════════════════════════════════════════════════════');
+        console.error('Status:', response.status, response.statusText);
+        console.error('Error:', errorText);
+        console.error('═══════════════════════════════════════════════════════════════\n');
+
+        if (response.status === 401) {
+          console.error('🔑 Authentication Error:');
+          console.error('  - Your PAT token is invalid or expired');
+          console.error('  - Get a new token from Firefly III:');
+          console.error('    Options > Profile > OAuth > Personal Access Tokens\n');
+        } else if (response.status === 404) {
+          console.error('🌐 URL Error:');
+          console.error('  - Firefly III URL might be incorrect');
+          console.error('  - Verify FIREFLY_BASE_URL in your .env file');
+          console.error('  - Ensure /api/v1 endpoint exists\n');
+        }
+
+        console.warn('⚠️  Server will start, but MCP tools will not work!\n');
+        return;
+      }
+
+      const data = await response.json() as any;
+
+      console.log('\n✅ FIREFLY III CONNECTION SUCCESSFUL ✅');
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('Firefly III Version:', data.data?.version || 'unknown');
+      console.log('API Version:', data.data?.api_version || 'unknown');
+      console.log('OS:', data.data?.os || 'unknown');
+      console.log('PHP Version:', data.data?.php_version || 'unknown');
+      console.log('═══════════════════════════════════════════════════════════════\n');
+
+    } catch (error) {
+      console.error('\n❌ FIREFLY III CONNECTION FAILED ❌');
+      console.error('═══════════════════════════════════════════════════════════════');
+      console.error('Error:', error instanceof Error ? error.message : 'Unknown error');
+
+      if (error instanceof Error) {
+        if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+          console.error('\n🌐 Network Error:');
+          console.error('  - Cannot reach Firefly III server');
+          console.error('  - Check FIREFLY_BASE_URL in your .env file');
+          console.error('  - Ensure Firefly III is running and accessible');
+          console.error('  - Current URL:', this.config.firefly.baseUrl);
+        } else if (error.message.includes('certificate') || error.message.includes('SSL')) {
+          console.error('\n🔒 SSL/Certificate Error:');
+          console.error('  - SSL certificate issue with Firefly III');
+          console.error('  - If using self-signed cert, you may need to configure NODE_TLS_REJECT_UNAUTHORIZED=0');
+        }
+      }
+
+      console.error('═══════════════════════════════════════════════════════════════\n');
+      console.warn('⚠️  Server will start, but MCP tools will not work!\n');
+    }
+  }
+
+  /**
    * Start the server
    */
   async start(): Promise<void> {
+    // Validate Firefly connection first
+    await this.validateFireflyConnection();
+
     return new Promise((resolve) => {
       this.app.listen(this.config.port, () => {
         console.log(`

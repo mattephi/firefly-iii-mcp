@@ -67,6 +67,59 @@ Or with Bun:
 bun run src/index.ts
 ```
 
+### Startup Validation
+
+The server automatically validates your Firefly III connection on startup. You'll see:
+
+**✅ Success:**
+```
+╔════════════════════════════════════════════════════════════════╗
+║  Testing Firefly III Connection...                            ║
+╚════════════════════════════════════════════════════════════════╝
+
+[Startup] Firefly III URL: https://firefly.example.com
+[Startup] PAT Token: eyJ0eXAiOi...
+[Startup] Attempting connection to Firefly III...
+
+✅ FIREFLY III CONNECTION SUCCESSFUL ✅
+═══════════════════════════════════════════════════════════════
+Firefly III Version: 6.1.0
+API Version: 2.0.0
+OS: Linux
+PHP Version: 8.2.0
+═══════════════════════════════════════════════════════════════
+```
+
+**❌ Failure (Invalid PAT):**
+```
+❌ FIREFLY III CONNECTION FAILED ❌
+═══════════════════════════════════════════════════════════════
+Status: 401 Unauthorized
+
+🔑 Authentication Error:
+  - Your PAT token is invalid or expired
+  - Get a new token from Firefly III:
+    Options > Profile > OAuth > Personal Access Tokens
+
+⚠️  Server will start, but MCP tools will not work!
+```
+
+**❌ Failure (Wrong URL):**
+```
+❌ FIREFLY III CONNECTION FAILED ❌
+═══════════════════════════════════════════════════════════════
+Error: getaddrinfo ENOTFOUND firefly.example.com
+
+🌐 Network Error:
+  - Cannot reach Firefly III server
+  - Check FIREFLY_BASE_URL in your .env file
+  - Ensure Firefly III is running and accessible
+
+⚠️  Server will start, but MCP tools will not work!
+```
+
+This validation happens **before** the server starts accepting connections, so you'll know immediately if there's a configuration issue.
+
 ## 🔐 OAuth 2.1 Flow for Claude.ai
 
 This server implements a complete OAuth 2.1 flow specifically designed for Claude.ai Custom Connectors:

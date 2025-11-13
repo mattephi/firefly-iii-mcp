@@ -1,0 +1,86 @@
+# Caddy Configuration for Firefly III MCP Server
+# Replace mcp.yourdomain.com with your actual domain
+
+mcp.yourdomain.com {
+    # Reverse proxy to the MCP server
+    reverse_proxy localhost:3000 {
+        # Pass the real client IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Health check
+        health_uri /health
+        health_interval 10s
+        health_timeout 5s
+    }
+
+    # Security headers
+    header {
+        # Enable HSTS
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+
+        # Referrer policy
+        Referrer-Policy "no-referrer-when-downgrade"
+
+        # Remove server header
+        -Server
+    }
+
+    # Enable compression
+    encode {
+        gzip 6
+        zstd
+    }
+
+    # Rate limiting (optional, requires Caddy rate limit plugin)
+    # rate_limit {
+    #     zone mcp_limit {
+    #         key {remote_host}
+    #         events 100
+    #         window 1m
+    #     }
+    # }
+
+    # Access logging
+    log {
+        output file /var/log/caddy/mcp-access.log {
+            roll_size 100mb
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+        level INFO
+    }
+
+    # Error logging
+    log {
+        output file /var/log/caddy/mcp-error.log {
+            roll_size 100mb
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+        level ERROR
+    }
+
+    # TLS configuration (automatic with Caddy)
+    # Caddy automatically obtains and renews certificates from Let's Encrypt
+    tls {
+        protocols tls1.2 tls1.3
+    }
+}
+
+# Optional: Redirect HTTP to HTTPS
+http://mcp.yourdomain.com {
+    redir https://mcp.yourdomain.com{uri} permanent
+}

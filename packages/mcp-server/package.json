@@ -1,0 +1,41 @@
+{
+  "name": "@firefly-iii-mcp/mcp-server",
+  "version": "2.0.0",
+  "description": "Fresh MCP server for Firefly III with Claude.ai custom connector support",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "firefly-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "zod": "^3.22.4",
+    "jose": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "firefly-iii",
+    "claude",
+    "oauth"
+  ],
+  "author": "Fresh Implementation",
+  "license": "MIT"
+}

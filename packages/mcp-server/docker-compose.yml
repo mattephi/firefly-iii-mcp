@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: firefly-mcp-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - PUBLIC_URL=${PUBLIC_URL}
+      - FIREFLY_BASE_URL=${FIREFLY_BASE_URL}
+      - FIREFLY_ACCESS_TOKEN=${FIREFLY_ACCESS_TOKEN}
+      - OAUTH_ISSUER=${OAUTH_ISSUER:-${PUBLIC_URL}/oauth}
+      - OAUTH_TOKEN_EXPIRATION=${OAUTH_TOKEN_EXPIRATION:-3600}
+      - OAUTH_REFRESH_TOKEN_EXPIRATION=${OAUTH_REFRESH_TOKEN_EXPIRATION:-86400}
+      - TRUST_PROXY=true
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - mcp-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: firefly-mcp-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./logs/caddy:/var/log/caddy
+    depends_on:
+      - mcp-server
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -48,6 +48,15 @@ await server.connect(transport);
 
 This package is part of a monorepo managed with Turborepo. Please refer to the [CONTRIBUTING.md](../../CONTRIBUTING.md) file in the project root for detailed contribution guidelines.
 
+### Regenerating tools
+
+The build step runs `scripts/generate-tools.ts`, which dereferences the Firefly III OpenAPI schema. By default it downloads the spec from `https://api-docs.firefly-iii.org/firefly-iii-6.2.13-v1.yaml`. If that host is blocked in your environment, set either of the following before running `npm run build`:
+
+- `FIREFLY_III_OPENAPI_FILE` – absolute or relative path to a local Firefly III OpenAPI YAML file
+- `FIREFLY_III_OPENAPI_URL` – alternate URL that serves the schema
+
+The repository also includes a cached snapshot in `packages/core/assets/firefly-iii-6.2.13-v1.yaml`, which is used automatically as a fallback when the remote URL is unavailable.
+
 ## License
 
 This project is licensed under the [MIT License](../../LICENSE). 

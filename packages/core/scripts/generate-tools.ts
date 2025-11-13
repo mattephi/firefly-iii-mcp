@@ -1,12 +1,52 @@
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import SwaggerParser from '@apidevtools/swagger-parser';
 import { OpenAPIV3 } from 'openapi-types';
 import { McpToolDefinition } from '../src/types';
 import { getToolsFromOpenApiDocument } from './generator/api';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** Api Document URL */
-const API_DOCUMENT_URL = 'https://api-docs.firefly-iii.org/firefly-iii-6.2.13-v1.yaml';
+const DEFAULT_API_DOCUMENT_URL = 'https://api-docs.firefly-iii.org/firefly-iii-6.2.13-v1.yaml';
+const LOCAL_SPEC_PATH = path.resolve(__dirname, '../assets/firefly-iii-6.2.13-v1.yaml');
 const OUTPUT_FILE = './src/tools.ts';
+
+type SpecSource = {
+  label: string;
+  location: string;
+};
+
+const envFile = process.env.FIREFLY_III_OPENAPI_FILE?.trim();
+const envUrl = process.env.FIREFLY_III_OPENAPI_URL?.trim();
+
+const specSources: SpecSource[] = [
+  envFile ? { label: 'FIREFLY_III_OPENAPI_FILE', location: envFile } : undefined,
+  envUrl ? { label: 'FIREFLY_III_OPENAPI_URL', location: envUrl } : undefined,
+  { label: 'Firefly III public OpenAPI URL', location: DEFAULT_API_DOCUMENT_URL },
+  { label: 'bundled OpenAPI snapshot', location: LOCAL_SPEC_PATH }
+].filter((item): item is SpecSource => Boolean(item));
+
+async function loadOpenApiDocument(): Promise<OpenAPIV3.Document> {
+  const errors: string[] = [];
+
+  for (const source of specSources) {
+    try {
+      const document = (await SwaggerParser.dereference(source.location)) as OpenAPIV3.Document;
+      console.log(`Loaded Firefly III schema from ${source.label}`);
+      return document;
+    } catch (error) {
+      errors.push(`- ${source.label}: ${(error as Error).message}`);
+    }
+  }
+
+  throw new Error(
+    `Failed to load the Firefly III OpenAPI schema. Tried:\n${errors.join(
+      '\n'
+    )}\nSet FIREFLY_III_OPENAPI_FILE or FIREFLY_III_OPENAPI_URL to a reachable schema file.`
+  );
+}
 
 /** Enabled actions to generate tools for */
 /*
@@ -35,7 +75,7 @@ const custonFilterFn = (tool: McpToolDefinition) => {
 
 (async () => {
   // Load the OpenAPI document
-  const document = (await SwaggerParser.dereference(API_DOCUMENT_URL)) as OpenAPIV3.Document
+  const document = await loadOpenApiDocument();
 
   const tools: McpToolDefinition[] = await getToolsFromOpenApiDocument(document);
 

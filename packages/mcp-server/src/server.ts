@@ -77,11 +77,35 @@ export class MCPServer {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
 
-    // Request logging
+    // Comprehensive request logging
     this.app.use((req, res, next) => {
+      const timestamp = new Date().toISOString();
+      console.log(`\n[${timestamp}] ========================================`);
+      console.log(`[Request] ${req.method} ${req.path}`);
+      console.log(`[Request] Origin: ${req.headers.origin || 'none'}`);
+      console.log(`[Request] User-Agent: ${req.headers['user-agent'] || 'none'}`);
+      console.log(`[Request] Content-Type: ${req.headers['content-type'] || 'none'}`);
+      console.log(`[Request] Authorization: ${req.headers.authorization ? req.headers.authorization.substring(0, 20) + '...' : 'none'}`);
+
       if (this.config.logLevel === 'debug') {
-        console.log(`[Server] ${req.method} ${req.path}`);
+        console.log(`[Request] All headers:`, JSON.stringify(req.headers, null, 2));
+        if (req.body && Object.keys(req.body).length > 0) {
+          console.log(`[Request] Body:`, JSON.stringify(req.body, null, 2));
+        }
       }
+
+      console.log(`========================================\n`);
+
+      // Track response
+      const originalSend = res.send;
+      res.send = function(data) {
+        console.log(`[Response] ${req.method} ${req.path} - Status: ${res.statusCode}`);
+        if (res.statusCode >= 400) {
+          console.error(`[Response] Error response:`, data);
+        }
+        return originalSend.call(this, data);
+      };
+
       next();
     });
   }
@@ -113,6 +137,8 @@ export class MCPServer {
 
     // 404 handler
     this.app.use((req, res) => {
+      console.error('[Server] ❌ 404 Not Found:', req.method, req.path);
+      console.error('[Server] Available endpoints: /.well-known/*, /oauth/*, /mcp, /health, /info');
       res.status(404).json({
         error: 'Not Found',
         message: `Route ${req.method} ${req.path} not found`
@@ -121,7 +147,11 @@ export class MCPServer {
 
     // Error handler
     this.app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+      console.error('[Server] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+      console.error('[Server] UNHANDLED ERROR');
       console.error('[Server] Error:', err);
+      console.error('[Server] Stack:', err.stack);
+      console.error('[Server] !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
       res.status(500).json({
         error: 'Internal Server Error',
         message: err.message
@@ -135,13 +165,20 @@ export class MCPServer {
   private setupOAuthRoutes() {
     // OAuth Authorization Server Metadata (RFC 8414)
     this.app.get('/.well-known/oauth-authorization-server', (req, res) => {
-      res.json(this.oauthProvider.getAuthorizationServerMetadata());
+      console.log('[OAuth] Serving authorization server metadata');
+      const metadata = this.oauthProvider.getAuthorizationServerMetadata();
+      console.log('[OAuth] Metadata:', JSON.stringify(metadata, null, 2));
+      res.json(metadata);
     });
 
     // OAuth Protected Resource Metadata (RFC 9470)
     this.app.get('/.well-known/oauth-protected-resource', (req, res) => {
+      console.log('[OAuth] Serving protected resource metadata');
       const resourceUrl = `${this.config.publicUrl}/mcp`;
-      res.json(this.oauthProvider.getProtectedResourceMetadata(resourceUrl));
+      const metadata = this.oauthProvider.getProtectedResourceMetadata(resourceUrl);
+      console.log('[OAuth] Resource URL:', resourceUrl);
+      console.log('[OAuth] Metadata:', JSON.stringify(metadata, null, 2));
+      res.json(metadata);
     });
 
     // Dynamic Client Registration (RFC 7591)

@@ -126,7 +126,7 @@ export function createServer(config: ServerConfig): McpServer {
 
   // Setup Express app
   const app = express();
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
   
   // Apply middleware
   app.use(express.json());
